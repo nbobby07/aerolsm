@@ -53,8 +53,6 @@ jobs:
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
-      # Tokio cannot run under Miri, so we point it at the std-only `miri`
-      # target which exercises the unsafe skiplist with modest iteration counts.
       - run: cargo miri test -p aerolsm-memtable --test miri
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"

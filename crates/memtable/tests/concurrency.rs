@@ -1,12 +1,4 @@
-//! Concurrency stress tests for `SkipListMemTable`.
-//!
-//! The MemTable's whole reason for being lock-free is to survive many writers
-//! and readers hammering it at once. These tests exercise that on both the async
-//! runtime (Tokio tasks across worker threads) and raw OS threads, asserting
-//! that no write is lost and that last-writer-wins is honored under contention.
-//!
-//! Run them under ThreadSanitizer or Miri to additionally check for data races
-//! and undefined behavior in the unsafe skiplist core (see `CONTRIBUTING.md`).
+//! MemTable concurrency tests.
 
 use std::collections::HashSet;
 use std::future::Future;
@@ -16,12 +8,6 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use aerolsm_core::{Bytes, Lookup, MemTable};
 use aerolsm_memtable::SkipListMemTable;
 
-/// Drives an immediately-ready future to completion using only `std`.
-///
-/// Every `SkipListMemTable` future resolves on its first poll (the work is
-/// synchronous in-memory), so a no-op waker is sufficient. This lets the
-/// raw-OS-thread test exercise the MemTable without pulling a runtime onto each
-/// thread, doubling as proof that the engine is genuinely runtime-agnostic.
 fn block_on_ready<F: Future>(future: F) -> F::Output {
     fn noop(_: *const ()) {}
     fn clone(_: *const ()) -> RawWaker {
@@ -29,7 +15,7 @@ fn block_on_ready<F: Future>(future: F) -> F::Output {
     }
     static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, noop, noop, noop);
 
-    // SAFETY: the vtable's functions are all no-ops over a null data pointer.
+    // SAFETY: no-op waker over a null data pointer.
     let waker = unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) };
     let mut cx = Context::from_waker(&waker);
     let mut future = Box::pin(future);
@@ -66,7 +52,6 @@ async fn concurrent_disjoint_writes_lose_nothing() {
 
     assert_eq!(mt.len(), (TASKS * PER_TASK) as usize);
 
-    // Every key written by every task must be present with its exact value.
     for task in 0..TASKS {
         for i in 0..PER_TASK {
             let seq = task * PER_TASK + i + 1;
@@ -79,8 +64,7 @@ async fn concurrent_disjoint_writes_lose_nothing() {
         }
     }
 
-    // The snapshot must be a duplicate-free, fully-sorted view.
-    let keys: Vec<Bytes> = mt.iter().map(|(k, _)| k).collect();
+    let keys: Vec<Bytes> = mt.iter().map(|e| e.key).collect();
     let unique: HashSet<&Bytes> = keys.iter().collect();
     assert_eq!(
         unique.len(),
@@ -113,7 +97,6 @@ async fn highest_seq_wins_on_a_contended_key() {
         h.await.unwrap();
     }
 
-    // Exactly one key exists, holding the value written at the maximum seq.
     let max_seq = TASKS * PER_TASK;
     assert_eq!(mt.len(), 1);
     assert_eq!(
@@ -127,7 +110,6 @@ async fn interleaved_insert_and_delete_stay_consistent() {
     const KEYS: u64 = 4_000;
     let mt = Arc::new(SkipListMemTable::new());
 
-    // Writer task: insert every key.
     let writer = {
         let mt = Arc::clone(&mt);
         tokio::spawn(async move {
@@ -140,7 +122,6 @@ async fn interleaved_insert_and_delete_stay_consistent() {
         })
     };
 
-    // Deleter task: tombstone every even key at a higher seq than its insert.
     let deleter = {
         let mt = Arc::clone(&mt);
         tokio::spawn(async move {
@@ -161,8 +142,6 @@ async fn interleaved_insert_and_delete_stay_consistent() {
         let key = format!("k{i:06}");
         let got = mt.get(key.as_bytes()).await.unwrap();
         if i % 2 == 0 {
-            // Delete seq (2i+2) always beats insert seq (2i+1), so evens are
-            // tombstoned regardless of interleaving.
             assert_eq!(got, Some(Lookup::Deleted), "key {key} should be deleted");
         } else {
             assert_eq!(got, Some(Lookup::Found(Bytes::from("present"))));
@@ -178,7 +157,6 @@ fn raw_os_threads_hammer_the_memtable() {
     let mt = Arc::new(SkipListMemTable::new());
     let mut handles = Vec::new();
 
-    // Writers on disjoint key ranges.
     for t in 0..THREADS {
         let mt = Arc::clone(&mt);
         handles.push(std::thread::spawn(move || {
@@ -190,14 +168,11 @@ fn raw_os_threads_hammer_the_memtable() {
         }));
     }
 
-    // Concurrent readers chasing a moving target; they must never crash or read
-    // torn data, even mid-insert.
     for _ in 0..THREADS {
         let mt = Arc::clone(&mt);
         handles.push(std::thread::spawn(move || {
             for i in 0..PER_THREAD {
                 let key = format!("th00-{i:06}");
-                // Result is either None or a valid value; both are fine here.
                 let _ = block_on_ready(mt.get(key.as_bytes())).unwrap();
             }
         }));

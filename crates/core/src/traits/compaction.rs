@@ -1,73 +1,43 @@
-//! The [`CompactionPolicy`] trait and its supporting metadata types.
-
 use crate::types::Bytes;
 
-/// A stable identifier for a single on-disk SSTable file.
+/// SSTable file identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SsTableId(
-    /// The raw, monotonically assigned file number.
+    /// File number.
     pub u64,
 );
 
-/// Lightweight metadata describing one SSTable, without its payload.
-///
-/// A compaction policy reasons purely over this metadata (sizes, key ranges,
-/// levels) to decide *what* to compact; it never reads the actual key/value
-/// blocks. Keeping the decision input this small makes policies cheap to run and
-/// trivial to unit test.
+/// SSTable metadata used by compaction policies.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SsTableMeta {
-    /// Unique identifier of the SSTable.
+    /// File id.
     pub id: SsTableId,
-    /// The LSM level this SSTable currently resides on (0 == freshest).
+    /// LSM level.
     pub level: usize,
-    /// Smallest user key contained in the SSTable (inclusive).
+    /// Smallest key.
     pub smallest_key: Bytes,
-    /// Largest user key contained in the SSTable (inclusive).
+    /// Largest key.
     pub largest_key: Bytes,
-    /// Approximate on-disk size in bytes.
+    /// On-disk size in bytes.
     pub size_bytes: u64,
-    /// Number of entries (including tombstones) in the SSTable.
+    /// Entry count.
     pub entry_count: u64,
 }
 
-/// A unit of compaction work selected by a [`CompactionPolicy`].
-///
-/// It names the inputs (by id) and the level their merged output should be
-/// written to. *Executing* the task (merging, writing the new SSTable, updating
-/// the manifest) is the engine's job in Phase 3; the policy only decides.
+/// Compaction work unit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompactionTask {
-    /// SSTables to be merged together.
+    /// Input SSTables.
     pub inputs: Vec<SsTableId>,
-    /// The destination level for the merged output.
+    /// Output level.
     pub output_level: usize,
 }
 
-/// A pluggable strategy that decides which SSTables to merge, and when.
-///
-/// Compaction is where an LSM trades write amplification, read amplification,
-/// and space amplification against one another. Different workloads want
-/// different trade-offs, so AeroLSM treats the strategy as a first-class plugin:
-///
-/// * size-tiered (write-optimized) - merge similarly sized files,
-/// * leveled (read/space-optimized) - keep non-overlapping sorted runs,
-/// * FIFO / TTL - drop the oldest data, ideal for ephemeral agent scratch state,
-/// * cost-based - custom heuristics for vector-metadata access patterns.
-///
-/// Policies are pure, synchronous decision functions: given the current shape of
-/// the tree they return the next [`CompactionTask`], or `None` if nothing is
-/// worth doing right now. Keeping them side-effect-free makes them easy to test
-/// in isolation and safe to call from the engine's scheduler.
+/// Picks the next compaction to run.
 pub trait CompactionPolicy: Send + Sync + 'static {
-    /// A short, human-readable name for diagnostics and metrics (e.g.
-    /// `"size-tiered"`).
+    /// Policy name.
     fn name(&self) -> &str;
 
-    /// Inspects the current per-level layout and returns the next compaction to
-    /// run, or `None` if the tree is already in good shape.
-    ///
-    /// `levels[i]` lists the SSTables currently on level `i`. The slice is
-    /// borrowed; implementations must not assume ownership.
+    /// Returns the next compaction, if any.
     fn pick_compaction(&self, levels: &[Vec<SsTableMeta>]) -> Option<CompactionTask>;
 }

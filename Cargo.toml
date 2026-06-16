@@ -18,19 +18,13 @@ homepage = "https://github.com/aerolsm/aerolsm"
 keywords = ["lsm", "database", "storage-engine", "async", "lock-free"]
 categories = ["database-implementations", "concurrency", "data-structures"]
 
-# Internal crates are referenced through the workspace so versions stay in lockstep.
 [workspace.dependencies]
 aerolsm-core = { version = "0.1.0", path = "crates/core" }
 aerolsm-memtable = { version = "0.1.0", path = "crates/memtable" }
 aerolsm-storage = { version = "0.1.0", path = "crates/storage" }
 aerolsm-compaction = { version = "0.1.0", path = "crates/compaction" }
-
-# Test/example-only dependencies. The runtime is intentionally kept out of the
-# library crates so AeroLSM stays runtime-agnostic (see CONTRIBUTING.md).
 tokio = { version = "1", default-features = false }
 
-# Shared lint policy. Every crate opts in with `[lints] workspace = true`.
-# `missing_docs = deny` enforces the project's pristine-documentation rule.
 [workspace.lints.rust]
 missing_docs = "deny"
 missing_debug_implementations = "warn"
@@ -44,6 +38,5 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 
-# Faster, still-debuggable test builds for the concurrency stress suites.
 [profile.test]
 opt-level = 2

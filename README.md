@@ -18,10 +18,8 @@ memory state** and **vector metadata**. Legacy engines were built for a
 synchronous, single-writer, disk-bound world. AeroLSM is built for thousands of
 concurrent async tasks mutating small keys with minimal contention.
 
-> **Status: Phase 1.** The foundation is here: a clean pluggable trait surface
-> and a production-grade, from-scratch lock-free MemTable. The WAL, SSTables, and
-> compaction land in upcoming phases (see the [Roadmap](#roadmap)). Star and
-> watch to follow along.
+> **Status: Phase 2.** WAL, portable storage backends, and SSTable writer/reader
+> are implemented. Compaction and the engine orchestration layer land in Phase 3.
 
 ## Why AeroLSM?
 
@@ -60,15 +58,19 @@ graph TD
     subgraph mem ["aerolsm-memtable"]
         SLM["SkipListMemTable<br/>(lock-free skiplist)"]
     end
-    subgraph store ["aerolsm-storage (Phase 2)"]
-        Backends["file / io_uring / object store"]
+    subgraph store ["aerolsm-storage"]
+        Backends["FileBackend / MemoryBackend"]
+        WAL["WalWriter / WalReader"]
+        SST["SsTableWriter / SsTableReader"]
     end
     subgraph comp ["aerolsm-compaction (Phase 3)"]
         Policies["size-tiered / leveled / FIFO"]
     end
 
     SLM -->|implements| TMem
-    Backends -.implements.-> TStore
+    Backends -->|implements| TStore
+    WAL --> Backends
+    SST --> Backends
     Policies -.implements.-> TComp
 ```
 
@@ -79,7 +81,7 @@ graph TD
 | -------------------- | ------------------------------------------ | ----------- |
 | `aerolsm-core`       | Core types and the pluggable trait surface | Stable seam |
 | `aerolsm-memtable`   | Default lock-free skiplist `MemTable`      | Implemented |
-| `aerolsm-storage`    | Durable `StorageBackend` implementations   | Phase 2     |
+| `aerolsm-storage`    | `StorageBackend`, WAL, SSTable I/O         | Implemented |
 | `aerolsm-compaction` | `CompactionPolicy` strategies              | Phase 3     |
 
 
@@ -151,7 +153,7 @@ one module, and carries a safety comment on every `unsafe` operation. See
 ## Roadmap
 
 - [x] **Phase 1** - Workspace foundation, core traits, lock-free skiplist MemTable
-- [ ] **Phase 2** - Write-Ahead Log + portable `StorageBackend` + SSTable writer/reader
+- [x] **Phase 2** - Write-Ahead Log + portable `StorageBackend` + SSTable writer/reader
 - [ ] **Phase 3** - Pluggable compaction (size-tiered, leveled), manifest
 - [ ] **Phase 4** - `io_uring` backend, pluggable compression
 - [ ] **Phase 5** - MVCC snapshots, vector-metadata-aware access paths

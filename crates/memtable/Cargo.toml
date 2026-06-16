@@ -14,8 +14,6 @@ categories.workspace = true
 [dependencies]
 aerolsm-core = { workspace = true }
 
-# The runtime is a *test/example* concern only; the library itself is
-# runtime-agnostic and depends on nothing but `aerolsm-core` and `std`.
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 

@@ -1,53 +1,16 @@
-//! [`SkipListMemTable`]: AeroLSM's default [`MemTable`] implementation.
-
 use std::fmt;
 
-use aerolsm_core::{Bytes, Lookup, MemTable, Result, SeqNum, ValueEntry};
+use aerolsm_core::{Bytes, Lookup, MemTable, MemtableEntry, Result, SeqNum, ValueEntry};
 
 use crate::skiplist::SkipList;
 
-/// A thread-safe, lock-free MemTable backed by an insert-only skiplist.
-///
-/// `SkipListMemTable` is the reference implementation of [`MemTable`]. It is
-/// designed for the AI-agent workloads AeroLSM targets: many concurrent tasks
-/// reading and writing small keys (agent memory slots, vector metadata) with
-/// minimal contention. All operations take `&self`, so a single instance can be
-/// wrapped in an [`std::sync::Arc`] and shared across an entire async runtime.
-///
-/// * **Writes** ([`insert`](MemTable::insert) / [`delete`](MemTable::delete))
-///   are lock-free: they link a node, or swap a value pointer, with a CAS.
-/// * **Reads** ([`get`](MemTable::get)) are wait-free traversals.
-/// * **Deletes** insert a tombstone rather than unlinking, preserving the
-///   layered-read semantics an LSM needs.
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-/// use aerolsm_core::{Bytes, Lookup, MemTable};
-/// use aerolsm_memtable::SkipListMemTable;
-///
-/// # tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(async {
-/// let mt = Arc::new(SkipListMemTable::new());
-///
-/// mt.insert(Bytes::from("agent:1:goal"), Bytes::from("ship aerolsm"), 1).await.unwrap();
-/// assert_eq!(
-///     mt.get(b"agent:1:goal").await.unwrap(),
-///     Some(Lookup::Found(Bytes::from("ship aerolsm"))),
-/// );
-///
-/// // A delete is a tombstone, distinguishable from "never written".
-/// mt.delete(Bytes::from("agent:1:goal"), 2).await.unwrap();
-/// assert_eq!(mt.get(b"agent:1:goal").await.unwrap(), Some(Lookup::Deleted));
-/// assert_eq!(mt.get(b"agent:1:unknown").await.unwrap(), None);
-/// # });
-/// ```
+/// Lock-free [`MemTable`] backed by an insert-only skiplist.
 pub struct SkipListMemTable {
     list: SkipList,
 }
 
 impl SkipListMemTable {
-    /// Creates a new, empty MemTable.
+    /// Creates an empty MemTable.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -94,7 +57,10 @@ impl MemTable for SkipListMemTable {
         self.list.byte_size()
     }
 
-    fn iter(&self) -> impl Iterator<Item = (Bytes, ValueEntry)> + '_ {
-        self.list.snapshot().into_iter()
+    fn iter(&self) -> impl Iterator<Item = MemtableEntry> + '_ {
+        self.list
+            .snapshot()
+            .into_iter()
+            .map(|(key, entry, seq)| MemtableEntry { key, entry, seq })
     }
 }

@@ -11,8 +11,6 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
-# The core crate is intentionally dependency-free and runtime-agnostic.
-# It must compile without Tokio, async-std, or any I/O runtime.
 [dependencies]
 
 [lints]

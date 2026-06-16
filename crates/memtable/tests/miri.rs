@@ -1,18 +1,4 @@
-//! A small, std-only concurrency test designed to run under Miri and
-//! ThreadSanitizer.
-//!
-//! Tokio's runtime relies on syscalls Miri cannot emulate, so the heavyweight
-//! async stress tests live elsewhere. This target deliberately uses only raw OS
-//! threads and an inline future driver, exercising the unsafe skiplist core
-//! (concurrent insert / overwrite / delete / read) with modest iteration counts
-//! so Miri can check it for undefined behavior and data races in reasonable
-//! time.
-//!
-//! Run it with:
-//!
-//! ```text
-//! cargo +nightly miri test -p aerolsm-memtable --test miri
-//! ```
+//! Miri concurrency smoke test.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -21,7 +7,6 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use aerolsm_core::{Bytes, Lookup, MemTable};
 use aerolsm_memtable::SkipListMemTable;
 
-/// Drives an immediately-ready future to completion using only `std`.
 fn block_on_ready<F: Future>(future: F) -> F::Output {
     fn noop(_: *const ()) {}
     fn clone(_: *const ()) -> RawWaker {
@@ -29,7 +14,7 @@ fn block_on_ready<F: Future>(future: F) -> F::Output {
     }
     static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, noop, noop, noop);
 
-    // SAFETY: the vtable's functions are all no-ops over a null data pointer.
+    // SAFETY: no-op waker over a null data pointer.
     let waker = unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) };
     let mut cx = Context::from_waker(&waker);
     let mut future = Box::pin(future);
@@ -43,15 +28,12 @@ fn block_on_ready<F: Future>(future: F) -> F::Output {
 
 #[test]
 fn concurrent_mixed_ops_are_sound() {
-    // Small counts: Miri is ~100x slower than native.
     const THREADS: u64 = 4;
     const PER_THREAD: u64 = 40;
 
     let mt = Arc::new(SkipListMemTable::new());
     let mut handles = Vec::new();
 
-    // Writers on disjoint ranges, each key inserted then overwritten then
-    // (for evens) tombstoned at a strictly higher seq.
     for t in 0..THREADS {
         let mt = Arc::clone(&mt);
         handles.push(std::thread::spawn(move || {
@@ -67,7 +49,6 @@ fn concurrent_mixed_ops_are_sound() {
         }));
     }
 
-    // Concurrent readers; they must never read torn data or hit UB.
     for _ in 0..THREADS {
         let mt = Arc::clone(&mt);
         handles.push(std::thread::spawn(move || {

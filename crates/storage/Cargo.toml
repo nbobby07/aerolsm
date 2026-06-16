@@ -14,5 +14,9 @@ categories.workspace = true
 [dependencies]
 aerolsm-core = { workspace = true }
 
+[dev-dependencies]
+aerolsm-memtable = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
 [lints]
 workspace = true

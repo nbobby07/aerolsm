@@ -1,14 +1,10 @@
-//! The pluggable trait surface that defines AeroLSM's architecture.
-//!
-//! Every major subsystem is expressed as a trait so contributors can swap in
-//! their own implementation without touching the engine core:
-//!
-//! * [`MemTable`] - the in-memory write buffer,
-//! * [`StorageBackend`] - the durable byte substrate (files, `io_uring`, ...),
-//! * [`CompactionPolicy`] - the strategy for merging SSTables.
+//! Pluggable subsystem traits.
 
+/// Compaction policy trait and metadata.
 pub mod compaction;
+/// MemTable trait.
 pub mod memtable;
+/// Storage backend trait.
 pub mod storage;
 
 pub use compaction::{CompactionPolicy, CompactionTask, SsTableId, SsTableMeta};

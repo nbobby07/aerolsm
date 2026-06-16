@@ -1,43 +1,21 @@
-//! The shared error type for AeroLSM.
-//!
-//! The error type is hand-written rather than derived with `thiserror` so the
-//! core crate stays completely dependency-free. It implements the standard
-//! [`std::error::Error`] trait, so it composes with `?`, `Box<dyn Error>`, and
-//! any error-reporting crate a downstream user prefers.
-
 use std::fmt;
 
-/// A convenient [`Result`] alias used throughout AeroLSM.
-///
-/// [`Result`]: std::result::Result
+/// AeroLSM result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Errors that can be produced by AeroLSM components.
-///
-/// The variants are intentionally coarse for Phase 1. As storage backends and
-/// compaction land, this enum will grow (always additively) to describe richer
-/// failure modes such as corruption or I/O faults.
+/// AeroLSM error type.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
-    /// An I/O operation failed in a storage backend.
+    /// I/O failure.
     Io(std::io::Error),
-
-    /// The engine, or one of its components, has been shut down and can no
-    /// longer accept operations.
+    /// Component is closed.
     Closed,
-
-    /// Stored data failed an integrity check (bad magic, checksum mismatch,
-    /// truncated record, ...).
+    /// On-disk corruption.
     Corruption(String),
-
-    /// An operation received an argument that violates an invariant.
+    /// Invalid argument.
     InvalidArgument(String),
-
-    /// A component-specific error described by a human-readable message.
-    ///
-    /// This is the escape hatch for pluggable implementations that need to
-    /// surface a failure without first extending this enum.
+    /// Other failure.
     Other(String),
 }
 
