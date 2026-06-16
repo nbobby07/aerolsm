@@ -1,0 +1,15 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+*.pdb
+
+# Cargo lockfile is committed for end-user binaries but ignored for libraries.
+# AeroLSM is published as libraries, so we keep it out of the tree for now.
+Cargo.lock
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

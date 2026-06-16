@@ -1,0 +1,18 @@
+[package]
+name = "aerolsm-storage"
+description = "Pluggable durable storage backends for AeroLSM (file, io_uring, object store)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+aerolsm-core = { workspace = true }
+
+[lints]
+workspace = true
